@@ -90,6 +90,17 @@ sc.dim6 <- paste0("Q",c(11,24,63,67,74,81))
 sc.dim7 <- paste0("Q",c(13,25,47,70,75,82,50))
 sc.dim8 <- paste0("Q",c(8,18,43,68,76,83))
 
+
+lapply(colnames(sc0[-1]), function(.x){
+  if (max(sc0[,.x],na.rm=T)>4 | min(sc0[,.x],na.rm=T)<0) res <- qplot(as.factor(sc0[,.x]),xlab=NULL, main=paste("plot", .x),fill=I("navajowhite3"), col=I("pink4"))
+  else res <- NULL
+})
+
+pl <- lapply(colnames(sc0)[-1], function(.x) qplot(as.factor(sc0[,.x]),xlab=NULL, main=paste("plot", .x),fill=I("navajowhite3"), col=I("pink4")))
+ml <- marrangeGrob(pl,ncol=2,nrow=3,top = NULL)
+print(ml)
+
+
 dl0$global <- apply(dl0[,-1],1,sum) #de 0 à 52
 for (i in 1:8){
   #browser()
@@ -186,6 +197,14 @@ for (i in 1:8){
   #browser()
   sc56[ ,paste0("dim",i)] <- apply(sc56[,get(paste0("sc.dim",i))],1,function(x)sum(x,na.rm=T)/length(!is.na(x))) #que faire des NA?
 }
+
+a <- apply(sc56[,grep("Q",colnames(sc56))],2,max,na.rm=T)
+b <- apply(sc56[,grep("Q",colnames(sc56))],2,min,na.rm=T)
+n <- names(a)[a>4|b<0]
+pl <- lapply(n, function(.x) qplot(as.factor(sc56[,.x]),xlab=NULL, main=paste("plot", .x),fill=I("navajowhite3"), col=I("pink4")))
+ml <- marrangeGrob(pl,ncol=2,nrow=3,top = NULL)
+print(ml)
+
 
 #corrélation:
 sapply(1:8,function(i)cor(dl56$global,sc56[ ,paste0("dim",i)])) #j'ai bien fait attention à ce que les numero de dl56 et sc56 soit dans le meme ordre
