@@ -5,59 +5,72 @@ gpe <- read.csv2("data/groupe.csv")
 hdrs <- read.csv2("data/hdrs.csv")
 scl <- read.csv2("data/SCL90.csv")
 
+
+
+#Changement de classe et gestion des données manquantes/aberrantes
+
 gpe$NUMERO <- as.integer(gpe$NUMERO)
 gpe$GROUPE <- as.factor(gpe$GROUPE)
 
-
-#Je transforme les colonnes en variables quantitatives (et NUMERO en chiffre pour ne pas avoir de problemes dus aux facteurs)
-
-summary(hdrs)
- hdrs$NUMERO <- as.integer(hdrs$NUMERO)
-# for (i in colnames(hdrs)[grep("HAM",colnames(hdrs))]){
-#   hdrs[,i] <- as.factor(hdrs[ ,i]) 
-#}
+summary(hdrs) #pas de valeurs aberrantes
+ hdrs$NUMERO <- as.integer(hdrs$NUMERO) #pour ne pas avoir des probleme lors des merges
+#uniformisation des colonnes en numerique
 for (i in colnames(hdrs)[grep("HAM",colnames(hdrs))]){
   hdrs[,i] <- as.numeric(as.character(hdrs[ ,i])) #sinon prend le rang du facteur
 }
 
-summary(scl)
-scl$NUMERO <- as.integer(scl$NUMERO)
-# for (i in colnames(scl)[grep("Q",colnames(scl))]){
-#   scl[,i] <- as.factor(scl[ ,i]) 
-# }
+summary(scl) #beaucoup de valeurs aberrantes (superieures à 4)
+scl$NUMERO <- as.integer(scl$NUMERO) #pour ne pas avoir des probleme lors des merges
+#uniformisation des colonnes en numerique et gestion des données aberrantes
 for (i in colnames(scl)[grep("Q",colnames(scl))]){
-  scl[,i] <- as.numeric(as.character(scl[ ,i])) #"NAs introduce by coercion" car il ya des ND
+  scl[,i] <- as.numeric(as.character(scl[ ,i])) #"NAs introduce by coercion" car il ya des ND et des ""
+  #Je change les valeurs aberrantes (superieures à 4) en NA
+  scl[,i] <- ifelse (scl[,i] > 4, NA, scl[,i]) 
+  #J'impute les NA en valeur mediane (ce n'est utilisé que pour des calculs exploratoires donc sans conséquence sur la conclusion)
+  scl[,i] <- ifelse (is.na(scl[,i]), median(scl[,i],na.rm=T), scl[,i]) 
 }
 
+#merge des 3 bases
 d <- merge(gpe, hdrs, by="NUMERO",all.x=T)
 d <- merge(d, scl, by=c("NUMERO","VISIT"),all.x=T,all.y=T)
 
-#ATTENTION : en lisant l'échelle de hamilton, je vois que les questions 16A et 16B
-#ne peuvent être renseignés en même temps, renseigne la même info et sont codés de la même manière
+#NB : 3 patients n'ont pas de score scl90 du tout, je ne les impute pas
+table(unique(hdrs$NUMERO) %in% unique(scl$NUMERO))
+#1 patient n'a pas de score de hamilton à 1 date 
+#(il y en aura plus quand on aura fait reshape, mais ce patient là était noté dans hdrs et la ligne était NA)
+d%>% filter(is.na(HAMD1))#c'est le patient 128 à J7. NB ce patient n'était pas dans scl donc son score n'a pas été imputé par la médiane (heureusement; on reste coherent)
 
-#en effet aucune lignes renseignés pour les 2
+#Fusion des questions 16A et 16B de l'echelle de Hamilton
+
+#en lisant l'échelle de hamilton, je vois que les questions 16A et 16B ne peuvent être renseignés
+#en même temps, renseigne la même info et sont codés de la même manière
+
+#aucune ligne renseignée pour les 2
 d[!is.na(d$HAMD16A) & !is.na(d$HAMD16B),]
 d[is.na(d$HAMD16A) & is.na(d$HAMD16B),] #une seule ligne est NA pour les 2 : 128
 
+#fusion en HAMD16:
 d$HAMD16 <- ifelse (!is.na(d$HAMD16A), d$HAMD16A, d$HAMD16B)
 d$HAMD16A <- NULL
 d$HAMD16B <- NULL
 d <- d[ , c( (1:grep("HAMD15",colnames(d))),grep("HAMD16",colnames(d)),(grep("HAMD17",colnames(d)) : (ncol(d)-1)))]
 
-#verif que chaque sujet a bien un seul groupe (verif que merge a bien marché)
-a <- table(d$NUMERO,d$GROUPE)
-table(a[,2] != 0 & a[,1]!=0) #personne n'a 2 groupe
 
+#Je recode VISIT en time(ça me parle plus), et je le met en numérique 
+#(à refaire, je garderai le nom VISITE pour plus de clareté pour les correcteurs)
 d$time <- as.integer(str_sub(d$VISIT,2,-1))
 d$VISIT <- NULL
-d <- d[, c(1,2,grep("time",colnames(d)),3: (ncol(d)-1))]
-d <- d[order(d$time,d$NUMERO),]
+d <- d[, c(1,2,grep("time",colnames(d)),3: (ncol(d)-1))] #Je change l'ordre des colonnes, dabord numéro et time puis le reste
+d <- d[order(d$time,d$NUMERO),] #Je réordonne mes lignes : selon time puis numéro
 #C'est un fichier long : 1 ligne par consultation  
-#reshape
-#dr <- reshape(d, direction="wide", timevar = c("J0",  "J14", "J21", "J28", "J4",  "J42", "J56", "J7"), idvar = "NUMERO", v.names=c(colnames(d)[grep("HAM",colnames(d))],colnames(d)[grep("Q",colnames(d))]))
+
+
+
+
+#Passage de long en wide et de wide en long avec reshape
 
 #wide : 1 ligne par patient avec les questionnaire aux différents temps sur la même ligne
-dw <- reshape (d, direction="wide", times = c(0, 4, 7, 14, 21, 28, 42, 56), idvar = "NUMERO", 
+dw <- reshape (d, direction="wide", timevar = "time", idvar = "NUMERO", 
                v.names=c(colnames(d)[grep("HAM",colnames(d))],colnames(d)[grep("Q",colnames(d))]), sep="_")
 #long : 1 ligne par consultation (d est déjà en format long mais pour l'exercice, je le refait à partir de dw)
 # dl <- reshape (dw, direction="long",varying=c(grep("HAM",colnames(dw)),grep("Q",colnames(dw))),times =  c(0, 4, 7, 14, 21, 28, 42, 56),
@@ -65,8 +78,8 @@ dw <- reshape (d, direction="wide", times = c(0, 4, 7, 14, 21, 28, 42, 56), idva
 dl <- reshape (dw, direction="long",varying=c(grep("HAM",colnames(dw)),grep("Q",colnames(dw))),
                idvar = "NUMERO", sep="_")
 
-
-#comparaison
+#------
+#comparaisons du fichier mergé de base et de celui obtenu par wide puis long
 all.equal(d,dl) #beaucoup de différence, notamment parce que la longueur des tableau diffère
 
 #quand il n'y a pas de visite à un temps, reshape rajoute NA
@@ -100,24 +113,11 @@ all.equal(dlnoNA[,-c(1,3)],dnoNA[,-c(1,3)])
 # attributes(dnoNA) 
 # attributes(dlnoNA) #comprend les info ajoutées par reshape
 
+#fin de la comparaison
+#---------
 
 
-#Pour connaître le nombre de visites manquantes, je préfère pour l'instant garder le tableau 
+#Je garde les scores en NA pour les visites manquantes
 saveRDS(dw,"data/dw.rds")
 saveRDS(dl,"data/dl.rds")
 
-
-
-#A faire plus tard pour prendre les noms de colonne de dw plutôt que de d (mais pb il faut changer les . en _)
-a <- "HAMD1.0" 
-a<- "HAMD12.50"
-is.na(as.integer(str_sub(a,-3,-3)))
-
-a<- "HAMD12_50"
-a <- "HAMD1_0" 
-grep("_",str_sub(a,-3,-3)) #bizarre le pattern "." est reconnu dans 1
-#faire un ifelse grep existe, str_sub(a,-1,-2), str_sub(a,-1,-3)
-
-
-
-is.integer(NA)
