@@ -1,0 +1,622 @@
+---
+title: "R Notebook"
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r allsource, echo=FALSE, message=FALSE}
+setwd("F:/to push/outils_git")
+source ("src/objects_outils.r")
+source("src/functions_outils.R")
+```
+
+#Introduction  
+
+L'échelle de Hamilton a été développée dans la fin des années 1950 dans le but de tester l'efficacité de la première génération d'antidépresseurs et a été publiée pour la première fois en 1960. Hamilton publie en 1967 une version qu'il considère comme définitive et qui, bien que controversée, deviendra le gold standard pour mesurer la sévérité de la dépression dans les essais clinique d'antidépresseurs.
+Cette version est composée de 17 items qui évalue le mieux selon Hamilton la symptomatologie dépressive et la note globale qui est l'addition de tous les items est censée refléter l'intensité générale du syndrome dépressif.  
+
+L'objectif de ce devoir était de comparer l'évolution du score de Hamilton dans deux groupes de patients déprimés. On ne sait cependant pas de quelle population est tirée l'échantillon, s'ils ont été sélectionnés au hasard dans cette ppopulation, ni en quoi les deux groupes diffèrent. En lisant l'énoncé on comprend cependant que les groupes reçoivent le même traitement, ils diffèrent donc plutôt au niveau des caractéristiques démographiques dont on ne dispose pas. Les analyses n'ont donc bien sûr aucune valeure scientifique et n'ont qu'un but pédagogique.  
+
+Le devoir sera découpé en 3 parties, une permière partie revalidant l'échelle de Hamilton pour les 146 patients sélectionnés, une seconde comparant les deux groupes à partir du score brut de Hamilton, par une simple comparaison de moyenne puis par un modèle mixte et une troisième partie comparant les deux groupes à partir d'une analyse de survie, l'évènement étant la chute de 50 % du score de Hamilton. 
+
+
+# Description Préliminaire
+
+Nous disposons des scores de Hamilton de 146 patients déprimés, évalués à J0, J4, J7, J14, J21, J28, J42, J56. 75 patients sont dans le groupe 0 et 71 patients dans le groupe 1. 
+
+```{r, echo=FALSE}
+a <- dwh
+b <- apply(dwh[,grep("tot",colnames(dwh))],2,function(x)!is.na(x))
+a$nvisites <- apply(b,1,sum)
+#a %>% filter (nvisites!=8 & !is.na(tot_56))
+qplot(as.factor(a[,"nvisites"]),xlab="Nombre de visites effectuées", ylab="Nombre de patients", fill=I("navajowhite3"), col=I("pink4"))
+
+#dl %>% filter(time==56 & !is.na(HAMD1)) %>% count
+```
+
+Fig.1 Diagramme de répartition du nombre de visites effectuées par patient.
+
+118 patients ont effectué les 8 visites et 120 patients ont été suivis jusqu'à la visite 56.
+
+
+# 1- Validation de l'échelle de Hamilton dans l'échantillon à J0 et J56 
+
+Plusieurs questions doivent être posées pour revalider une échelle :
+- Quel sont les caractéristiques de mon échantillon?
+- Que mesure l'échelle?  
+    + validité de contenu : lecture de l'échelle 
+    + validité concourrante et divergente
+- Que vaut la mesure?  
+    + qualité des items : distribution des réponses et données manquantes
+    + structure dimensionnelle 
+    + reproductibilité/fiabilité : cohérence interne  
+
+Nous procèderons à une revalidation de l'échelle à J0 et à J56. Pour des raisons pratiques l'ordre de cette validation n'a pas été respecté, j'ai dabord lu l'échelle puis j'ai répondu à la question "que vaut la mesure ?" afin de me familiariser d'avantage avec l'échelle de Hamilton et l'échantillon dont je dispose. En dernier, j'ai observé la validité concourrante et divergente avec l'échelle SCL-90 R.  
+
+L'énoncé nous apprend que 146 patients déprimés ont été sélectionnés. C'est un nombre de sujets satisfaisant pour revalider une échelle et l'échelle de Hamilton a justement été construite pour des patients déprimés. 
+En lisant l'échelle de Hamilton, on voit qu'elle comporte 17 items, de prime abord plutôt divers, tous quantitatifs discrets codés de 0 à 2 ou de 0 à 4 (0 = symptome absent, 2 ou 4 = symptome sévère). Le score global est une somme de ces items, qui va de 0 à 52. Plus le score global est élevé, plus le syndrome dépressif est sévère.  
+
+
+## A- Validation de l'échelle au temps J0
+
+
+### A1 - Analyse d'items
+
+#### a- Répartition des réponses aux items : effet plancher / effet plafond et missing values
+
+```{r, message=FALSE, echo=FALSE, fig.width=5, fig.height=4,fig.show='hold',fig.align='center'}
+# par (mfrow=c(5,4))
+# sapply(colnames(dl0)[-1], function(.x) qplot(as.factor(dl0[,.x]),xlab=NULL, main=paste("plot", .x),fill=I("navajowhite3"), col=I("pink4")))
+ pl <- lapply(colnames(dl0)[-1], function(.x) qplot(as.factor(dl0[,.x]),xlab=NULL, main=.x, fill=I("navajowhite3"), col=I("pink4")))
+ ml <- marrangeGrob(pl,ncol=3,nrow=2,top = NULL)
+ print(ml)
+```
+
+Fig.2 : Diagramme de la distribution des réponses pour chaque item à J0.
+
+
+La distribution des items nous permet de déceler d'éventuels effet plancher et effet plafond. On obesrve un effet plancher pour l'items 17 et plafond pour les items 4 et 13, Les réponses aux autres items sont globalement bien réparties. La réponse 0 n'est pas choisie pour la question 1 concernant l'humeur dépressive (0=absence de tristesse), ce qui est attendu pour des individus déprimés. La distribution des réponses aux items s'écarte clairement de la normale pour les items 4, 5, 6, 13, 14, 16 et 17. Pour les autres items, l'allure de la distribution est approximativement normale. 
+
+#### b- Données manquantes
+
+Les échelles des 146 patients sont remplies intégralement à J0. Les items ont donc l'air d'avoir été bien compris et avec une bonne acceptabilité. 
+
+#### c- Redondance des items
+
+On évalue la redondance des items par la corrélation entre item. 
+On réalise des corrélations de spearman. Aucune condition n'est nécessaire pour calculer une corrélation. 10 couples ont une corrélation entre 0,2 et 0,3 en valeur absolue et un couple a une corrélation de 0,44 (symptomes somatiques gastro-intestinaux et perte de poids). Donc globalement, les items mesurent des aspects distincts de la dépression. 
+
+```{r, echo=FALSE, eval=FALSE}
+mat <- cor(dl0[,-1])
+
+couples<-lapply(c(0.2,0.4),function(w){
+  #pour supprimer les doublons
+  mat2<- lower.tri(mat,diag=FALSE)
+  rownames(mat2)<-rownames(mat)
+  colnames(mat2) <- colnames(mat) 
+  mat2 <- ifelse(mat2==TRUE,mat,0) 
+  #pour chercher les coefficients de corrélation superieur à w
+  w_r <- which(abs(mat2)>=w )
+  #pour trouver les noms de ligne et colonne de ces coefficients
+  which_couple <- lapply(w_r,function(x){
+    k <- arrayInd(x, dim(mat2))
+    d<-data.frame(var1=rownames(mat2)[k[,1]], var2=colnames(mat2)[k[,2]],r=mat2[x])
+    return(d)
+  })
+  #Je colle les listes
+  which_couple <- data.frame(do.call(rbind,which_couple))
+  return(which_couple)
+})
+couples_rename <- couples
+colnames(couples_rename[[1]])<- c("variable 1","variable 2", "coefficient de corrélation")
+
+couplesup0.2 <- couples_rename[[1]]#la liste 1 a toutes les corrélations supérieures à 0.2, le 2 a seulement celles sup à 0.4
+couplesup0.4 <- couples_rename[[2]]
+couplesup0.2
+```
+
+
+
+### A2 - Structure dimensionnelle
+
+Pour savoir ce que mesure une échelle, et justifier le calcul du score global, il est intéressant de connaître sa structure dimensionnelle. Le score globale de l'échelle de Hamilton est calculée à partir de la somme des items, ce qui doit être justifié par une échelle unidimensionnelle. La structure dimesionnelle est appréciée par le diagramme des valeurs propres et par l'analyse factorielle.
+
+#### a - Diagramme des valeurs propres
+
+```{r, echo=FALSE}
+scree.plot(dl0[,-1], simu=20, title = NULL )
+```
+
+Fig.3 Diagramme des valeurs propres de l'échelle de Hamilton à J0
+
+Sur ce diagramme des valeurs propres (fig.3) les points correspondent aux valeurs propres représentées par chaque dimension (c'est à dire la longueur de chaque composante principale). Plusieurs méthodes permettent de décider des dimensions à conserver, je choisis celle simulant des diagrammes de valeurs propres au hasard (c'est l'amas de lignes que l'on voit sur le graphique). J'ai 3 dimensions qui ressortent. Pour savoir à peu près à quoi correspondent ces dimensions, et quels items appartient à quel dimension, je réalise une analyse factorielle à 3 facteurs.
+
+
+#### b - Analyse factorielle
+
+```{r, eval=FALSE, echo=FALSE}
+fit.3 <- factanal(dl0[, -1], factors = 3, rotation = "varimax")
+print(fit.3, digits=2, cutoff=.2,sort=F)
+#fit.3$loadings
+```
+
+##### Méthode
+L'analyse factorielle à 3 facteurs est effectuée. J'utilise une rotation varimax (qui suppose que les variables sont indépendantes) car elle est plus simple à interprêter, et nous avons vu de plus que les items sont très peu corrélés entre eux. La condition de validité de l'analyse est la normalité de la distribution des items. Nous avons vu plus haut que les items n'avaient pas tous une distribution normale, mais ça convient pour une analyse exploratoire, en gardant en tête que les résultats de l'analyse ne seront pas très précis.
+
+##### Résultats
+Le modèle à 3 facteurs ne paraît pas satisfaisant : les items sont très peu corrélés avec les facteurs, et la répartition des items dans les différents facteurs ne semble pas cliniquement pertinente. 
+
+En réalisant de manière exploratoire toujours une analyse factorielle à 1 facteur, on voit que les items sont encore moins corrélés avec le facteur.
+
+##### Discussion
+L'unidimensionnalité de l'échelle n'est donc pas une hypothèse acceptable avec notre échantillon à J0. Mais une échelle à 3 dimensions ne fait pas non plus sens cliniquement.
+
+Le seul découpage qui pourrait cliniquement faire sens avec les données dont on dispose est une répartion des items selon deux dimensions qui apparaissent lors de l'analyse factorielle à 2 facteurs : une dimension psychique (items 1, 2, 3, 5, 6, 7, 9, 10, 11, 15 et 17) et une dimension somatique (items 4, 8, 12, 13, 14 et 16). 
+
+Mais pour la suite des calculs je ferai tout de même l'hypothèse de l'unidimensionnalité de l'échelle, sinon faire la somme des items n'a pas de sens.
+
+
+### A3 - Cohérence interne
+
+La cohérence interne des items s'apprécient grâce au coefficient alpha de cronbach. Comme l'échelle de Hamilton est considérée comme une échelle unidimensionnelle je ne calcule qu'un seul coefficient. Je calcule son intervalle de confiance par bootstrap. Le coefficient alpha de cronbach est de 0,46, IC95% [0,20-0,61]. Ce coefficient est donc plutôt médiocre surtout pour une échelle censée entre unidimensionnelle.
+```{r, echo=FALSE, eval=FALSE}
+set.seed(123) #pour avoir un résultat reproductible
+BootCronCi(dl0,1000)
+```
+
+
+### A4 - Validité concourrante et divergente
+
+#### a- Matrice de corrélation entre score de Hamilton et dimensions de la SCL-90 R
+
+Une autre façon de valider une échelle est de voir comment elle corrèle avec d'autres échelles. Les patients de la présente étude ont donc également rempli à chaque temps l'échelle SCL-90 R qui est une échelle formée de 90 phrases courtes décrivant des symptomes divers. Sa structure factorielle comprend plusieurs sous-items ou dimensions dont une dimension reflétant la dépression. Nous en considèrerons 9 ici : somatisation, symptômes obsessionnels, sensitivité interpersonnelle ou vulnérabilité, dépression, anxiété, hostilité, phobies, traits paranoïaques et traits psychotiques. 
+Nous avons donc calculer la corrélation (de spearman) entre le score global de l'échelle de Hamilton et chacune de ces 9 dimensions de l'échelle de SCL-90 R.  
+
+A J0, 112 patients ont des données complètes pour SCL-90 R et les 34 questionnaires incomplets ont moins de 12 items manquants. J'ai imputé les items manquant par la médiane pour chaque item.  
+
+```{r, echo=FALSE}
+#calcul du score global de Hamilton
+dl0$global <- apply(dl0[,-1],1,sum) #de 0 à 52
+
+#corrélation:
+a <- cor(dl0$global,sc0[ ,dimensions],use="complete.obs")
+kable(data.frame(dimensions = dimensions[order(abs(as.numeric(a)),decreasing = T)], correlation = as.numeric(a)[order(abs(as.numeric(a)),decreasing = T)])) #j'ai bien fait attention à ce que les numero de dl0 et sc0 soit dans le meme ordre
+#le score de hamilton corrèle le plus avec dimension 1(somatisation), 2(symptomes obsessionels), 4(dépression)
+```
+
+Table 1 Corrélation entre le score de Hamilton et les sous-score de la SCL-90 R à J0
+
+Le score de Hamilton corrèle le plus avec les dimensions somatisation (r=0,37), symptômes obsessionels (r=0,32) et dépression (r=0,28). Les autres dimensions sont très peu corrélées avec le score de Hamilton. La validité concourrante et divergente est donc satisfaisante. 
+
+
+#### b- ACP focalisée entre score de Hamilton et dimensions de la SCL-90 R
+
+L'ACP focalisée nous permet de représenter la même information de manière plus lisible. La significativité est donnée de manière informative par le cercle rouge (la répartition du score global à J0 est d'allure normal, les conditions du test de corrélation de Spearman sont donc remplies), mais est inutile ici. Le score global est d'avantage corrélé aux dimensions somatisation, symptômes obsessionels et dépression avec des coefficients de corréalations entre 0,2 et 0,4.   
+```{r, echo=FALSE}
+#ACP focalisée: 
+dlsc0 <- merge(dl0[,c("NUMERO","global")], sc0[ ,c("NUMERO",dimensions)],by="NUMERO",all.x=T,all.y=F)
+fpca(y="global",x=dimensions,data=dlsc0)
+
+```
+
+Fig.4 ACP focalisée entre le score global de Hamilton et les dimensions du SCL-90 R à J0
+
+
+En conclusion, l'échelle est donc globalement valide à J0, avec un score global qui est la somme des 17 items.  
+
+
+
+## B- Validation de l'échelle au temps J56
+
+Les étapes sont les mêmes, j'irai donc plus rapidement.
+
+### B1 - Analyse d'items
+
+#### a- Répartition des réponses aux items : effet plancher / effet plafond et missing values
+
+```{r, message=FALSE, echo=FALSE, fig.width=5, fig.height=4,fig.show='hold',fig.align='center'}
+# par (mfrow=c(5,4))
+# sapply(colnames(dl0)[-1], function(.x) qplot(as.factor(dl0[,.x]),xlab=NULL, main=paste("plot", .x),fill=I("navajowhite3"), col=I("pink4")))
+ pl <- lapply(colnames(dl56)[-1], function(.x) qplot(as.factor(dl56[,.x]),xlab=NULL, main=.x, fill=I("navajowhite3"), col=I("pink4")))
+ ml <- marrangeGrob(pl,ncol=3,nrow=2,top = NULL)
+ print(ml)
+```
+
+Fig.5 : Diagramme de la distribution des réponses pour chaque item à J56.
+
+
+La distribution des réponses au sein des items (Fig.5) nous montre que les réponses aux items sont globalement bien réparties à J56 à part les questions 3 8 16 et 17 qui ont un effetplancher. La distribution des items ne suit pas une loi normale.
+
+
+#### b- Données manquantes
+
+120 patients ont une échelle complète, 26 patients ont une échelle non remplie (NA aux 17 items). Cela ne change rien à l'acceptabilité ni à la compréhension des items, les 26 non réponses sont des perdus de vu. 
+NB : L'échelle ayant été remplie pour la 7e ou 8e fois selon les patients, ils doivent maintenant bien la connaître...
+
+
+#### c- Redondance des items
+
+On évalue la redondance des items par la corrélation entre item. 
+On réalise des corrélations de spearman. Aucune condition n'est nécessaire pour calculer une corrélation. 60 couples ont une corrélation entre 0,2 et 0,4 en valeur absolue et 8 couples ont une corrélation entre 0,4 et 0,5 et 7 couples ont une corrélation de plus de 0,5. Donc certains items sont redondants. 
+
+```{r, echo=FALSE, eval=FALSE}
+mat <- cor(dl56[,-1],use="complete.obs")
+
+couples<-lapply(c(0.2,0.4),function(w){
+  #pour supprimer les doublons
+  mat2<- lower.tri(mat,diag=FALSE)
+  rownames(mat2)<-rownames(mat)
+  colnames(mat2) <- colnames(mat) 
+  mat2 <- ifelse(mat2==TRUE,mat,0) 
+  #pour chercher les coefficients de corrélation superieur à w
+  w_r <- which(abs(mat2)>=w )
+  #pour trouver les noms de ligne et colonne de ces coefficients
+  which_couple <- lapply(w_r,function(x){
+    k <- arrayInd(x, dim(mat2))
+    d<-data.frame(var1=rownames(mat2)[k[,1]], var2=colnames(mat2)[k[,2]],r=mat2[x])
+    return(d)
+  })
+  #Je colle les listes
+  which_couple <- data.frame(do.call(rbind,which_couple))
+  return(which_couple)
+})
+couples_rename <- couples
+colnames(couples_rename[[1]])<- c("variable 1","variable 2", "coefficient de corrélation")
+
+couplesup0.2 <- data.frame(couples_rename[[1]])#la liste 1 a toutes les corrélations supérieures à 0.2, le 2 a seulement celles sup à 0.4
+couplesup0.4 <- couples_rename[[2]]
+couplesup0.2 %>% arrange(coefficient.de.corrélation)
+```
+
+
+### B2 - Structure dimensionnelle
+
+#### a - Diagramme des valeurs propres
+
+```{r, echo=FALSE}
+scree.plot(dl56[,-1], simu=20, title = NULL )
+```
+
+Fig.6 Diagramme des valeurs propres de l'échelle de Hamilton à J56
+
+Là encore, l'amas de lignes représente le résultat obtenus par le hasard. Une dimension ressort particulièrement. Pour avoir un argument de plus à l'unidimensionnalité de l'échelle, je réalise une analyse factorielle à un facteur.
+
+
+#### b - Analyse factorielle
+
+```{r, eval=FALSE, echo=FALSE}
+fit.1 <-factanal(dl56[!is.na(dl56$HAMD1), -1], factors = 1, rotation = "varimax")
+print(fit.1,digits=2, cutoff=.1,sort=F) 
+```
+L'analyse factorielle à 1 facteurs avec rotation variamx est effectuée.
+Le modèle paraît plutôt satisfaisant, les corrélations entre la dimension et chaque item sont satisfaisantes.
+L'échelle paraît donc unidimensionnelle à J56.
+
+
+
+
+### B3 - Cohérence interne
+
+Le coefficient alpha de cronbach est de 0,82, IC95% [0,74-0,86]. Ce coefficient est donc bon. Il n'est pas étonnant qu'il soit meilleur qu'à J0 car les items sont plus corrélés entre eux.
+
+```{r, echo=FALSE, eval=FALSE}
+set.seed(1234) #pour avoir un résultat reproductible
+BootCronCi(dl56,1000)
+```
+
+### B4 - Validité concourrante et divergente
+
+
+#### a- Matrice de corrélation entre score de Hamilton et dimensions de la SCL-90 R
+
+A J56, seul 92 patients avaient une scl90 complète, 25 patients avaient un questionnaire incomplet avec moins de 10 items manquants. Pour ces patients, j'ai imputé les données manquantes de chaque question manquante par la médiane pour cette question. 1 patient n'avait pas rempli le questionnaire, je n'ai pas imputé ses réponses.  
+
+```{r, echo=FALSE}
+#calcul du score global de Hamilton
+dl56$global <- apply(dl56[,-1],1,sum) #de 0 à 52
+
+#corrélation:
+a <- cor(dl56$global,sc56[ ,dimensions],use="complete.obs")
+kable(data.frame(dimensions = dimensions[order(abs(as.numeric(a)),decreasing = T)], correlation = as.numeric(a)[order(abs(as.numeric(a)),decreasing = T)])) 
+```
+
+Table 2 Corrélation entre le score de Hamilton et les sous-score de la SCL-90 R à J56  
+
+Le score de Hamilton corrèle le plus avec la dimension dépression (r=0.66). Les autres dimensions sont également corrélées avec le score de Hamilton. La validité concourrante est satisfaisante, la validité divergente un peu moins.  
+
+#### b- ACP focalisée entre score de Hamilton et dimensions de la SCL-90 R
+
+L'ACP focalisée nous permet de représenter la même information de manière plus lisible.    
+```{r, echo=FALSE}
+#ACP focalisée: 
+dlsc56 <- merge(dl56[,c("NUMERO","global")], sc56[ ,c("NUMERO",dimensions)],by="NUMERO",all.x=T,all.y=F)
+fpca(y="global",x=dimensions,data=dlsc56)
+
+```
+
+Fig.7 ACP focalisée entre le score global de Hamilton et les dimensions du SCL-90 R à J56
+
+On peut donc conclure avec les données obtenues à J56 que l'échelle de Hamilton est un instrument de mesure unidimensionnelle de bonne qualité.
+
+
+## Conclusion de la partie 1
+
+En procédant à une validation de l'échelle à J0 et J56, on voit que les items sont bien construits sans effet plancher ni plafond et sans données manquante. Les items sont très peu corrélés à J0 mais plus fortement à J56. L'unidimensionnalité n'est pas claire à J0, mais apparaît clairement à J56. La cohérence interne est faible à J0 mais très bonne à J56. La validité concourrante et divergente est plutôt bonne à J0 et J56. Donc globalement on peut conclure que l'échelle de Hamilton mesure bien la dépression avec une plus ou moins bonne fiabilité selon la date de visite.
+
+Pour la suite de l'étude nous considèrerons que l'échelle est unidimensionnelle, et ainsi la somme des items nous permet de mesurer l'intensité de la dépression.
+
+
+
+
+# 2- Comparaison de l'évolution du score de Hamilton dans les deux groupes
+
+Maintenant que l'échelle est validée, nous allons comparer la réponse au traitement dans le groupe 0 et dans le groupe 1. Nous utiliserons 2 méthodes différentes, la méthode LOCF et le modèle mixte à effet sujet aléatoire.
+
+## A- Méthode LOCF
+
+### Méthode
+J'impute les données manquantes par la dernière valeur connue grâce à la méthode LOCF (Last Observation Carried Forward). Je vais ensuite comparer l'évolution du score entre J0 et J56 par une régression linéaire avec pour variable explicative la variable groupe. Comme il n'y a qu'une seule variable explicative, on peut faire un test de student.  
+Afin de mieux me représenter la dispersion de la différence des scores entre les groupes, j'ai également réaliser une boîte à moustache.
+
+### Conditions de validité:
+
+Pour un test de student, on vérifié l'égalité des variances de l'a différence de l'évolution du score entre J0 et J56 dans les deux groupes, c'est vérifié ici (variance de 8.7 dans le groupe 0 et 8.2 dans le groupe 1). On vérifie également la normalité de l'évolution du score. 
+
+```{r, echo=FALSE}
+dwh$last <- apply(dwh[,grep("tot_",colnames(dwh))],1,getLOCF)
+
+for (i in paste0("tot_",vartime)){
+  dwh[ ,i] <- ifelse (is.na(dwh[ ,i]), dwh$last,dwh[ ,i])
+}
+dwh$diff_56_0 <- dwh$last - dwh$tot_0 
+#hist(dwh$diff_56_0)
+qplot(dwh$diff_56_0, xlab="Différence de score entre J56 et J0", fill=I("grey80"), col=I("darkblue"),bins=10)
+      
+```
+
+Fig.8 Distribution de la différence de score entre J56 et J0
+
+On voit sur la figure 8 que l'évolution du score entre J0 et J56 est normale.
+Toutes les conditions de validité sont donc remplies.
+
+(pour une régression linéaire, on aurait testé la normalité des résidus, après vérification, ils sont normaux)
+
+### Résultats
+
+```{r, echo=FALSE, width=5}
+ggplot(dwh, aes(y = diff_56_0, x=GROUPE)) +
+stat_boxplot(geom = "errorbar", width = 0.3, color = "lightsteelblue4") +
+geom_boxplot(width = 0.5, fill = "lightsteelblue2", color = "lightsteelblue4") +
+scale_x_discrete() + xlab("Groupe") + ylab("Différence de score entre J56 et J0") +ggtitle ("Diiférence de score entre J56 et J0 selon les groupes")
+
+```
+
+Fig.9 Boîte à moustache de la dispersion de la différence des scores entre J56 et J0 dans les deux groupes. 
+
+Les boîtes à moustache nous montre que la diminution du score a l'air plus importante dans le groupe 0. Pour tester cette osbervation je réalise le test de student qui va comparer les moyennes obtenus dans chacun des groupes.  
+
+Le test de student est significatif avec un risque de première espèce de 0.05%. Il y a donc une différence d'efficacité du traitement dans les deux groupes, dans le sens d'une efficacité supérieure dans le groupe 0. 
+
+```{r, echo=FALSE, eval=FALSE}
+t.test(dwh[dwh$GROUPE=="0","diff_56_0"],dwh[dwh$GROUPE=="1","diff_56_0"])
+```
+
+### Discussion
+
+Ce test conclu à la différence d'efficacité du traitement entre les 2 groupes, dans le sens d'une efficacité supérieure dans le groupe 0. Cependant, la méthode LOCF entraîne un biais et on ne prend pas en compte le fait que les données soit répétées dans le temps ni le fait que le score de départ de chaque sujet est différent. 
+
+
+## B- Modèle mixte à effet sujet aléatoire
+
+### Méthode
+Une autre manière de comparer l'évolution des scores entre les 2 groupes est de comparer la vitesse de décroissance du score. 
+
+Soit le modèle :
+Score = a + b groupe + c temps + d groupe*temps + résidu
+
+Si on fait l'analogie avec l'équation de la droite qui relie le score à J0 et le score à J1 dans chaque groupe, équation de la forme Score= alpha + beta temps
+On voit que la pente sera de c dans la groupe 0 et c+d dans le groupe 1, soit une différence de pente de d.
+
+Cependant, ce modèle est faux, il faut rajouter un effet sujet qui prend en compte le fait que l'ordonnée à l'origine est différente selon le sujet (le patient). Un effet fixe étant trop coûteux en variable (145 variables binaires pour 146 sujets), on préfère mettre un effet sujet aléatoire : l'ordonnée à l'origine suit une loi normale.
+
+Voici le modèle mixte :
+mod2 <- lmer(score ~ temps + groupe +(1|patient),dlh)
+
+Cependant l'interaction entre visite et groupe est significative, je rajoute donc l'interaction dans mon modèle:
+mod2 <- lmer(score ~ temps + groupe + temps*groupe +(1|patient),dlh)
+
+
+### Conditions de validité
+
+```{r, echo= FALSE}
+mod2 <- lmer(tot ~ time*GROUPE +(1|NUMERO),dlh)
+qplot(resid(mod2), xlab="résidus du modèle mixte mod2", binwidth=2)
+```
+
+Fig.10 Distribution des résidus du modèle mixte mod2
+
+Les conditions de validité étant respectées (normalité des résidus), je peux interprêter mes résultats.
+
+
+### Résultats
+La différence de pente correspond à l'estimate de la variable VISITE*GROUPE qui est un effet fixe. Elle vaut 0,09. Le test de la différence de pente = 0 nous donne une t value de 5,28. Pour interprêter cette t value, je peut faire l'approximation par une loi normale (grand nombre de sujets donc grand nombre de degrés de liberté) et la comparer à 1,96 (valeur de Z pour alpha=5%). 5,28>1,96 donc au risque 5% la pente est significativement différente entre les deux groupes, dans le sens d'une décroissance plus rapide dans le groupe 0 (pente=-0.39) que dans le groupe 1 (pente = -0.39 + 0.09 = -0.3). 
+
+
+### Discussion 
+La vitesse de décroissance des courbes est significativement différente entre les deux groupes, dans le sens d'une décroissance plus rapide dans le groupe 0.
+
+certains package dans r (pbkrtest par exemple) nous permettent d'avoir une approximation du nombre de degré de liberté, afin de pouvoir lire la pvalue dans la table de student. Cependant, ce qui nous intéresse est de rejetter ou non l'hypothèse nulle, et la valeur exacte de la pvalue n'a pas d'intérêt. Il est évident qu'avec une telle valeur de t, l'hypothèse nulle sera de toute façon rejetée.
+
+
+## Conclusion de la partie 2
+Le traitement est significativement plus efficace dans le groupe 0 que dans le groupe 1 lorsque l'on compare les scores bruts de Hamilton.
+
+
+
+
+# 3- Analyse de survie 
+
+Il est intéressant d'effectuer une analyse de survie afin de prendre en compte le fait que certains patients sont perdus de vue avant la fin de l'étude.
+
+Contrairement à ce qu'indique le nom "analyse de survie", l'évènement n'est bien sûr pas la mort du patient mais la réponse au traitement du patient. Nous définissons tout d'abord ce qu'est la réponse au traitement : c'est la chute d'au moins 50% du score de Hamilton par rapport à J0.  
+La durée de suivi est définie comme étant le délai entre J0 et :  
+- la date de l'évènement le cas échéant
+- ou la date de dernière nouvelle pour les perdus de vue 
+- ou J56 pour les exclus vivant.
+
+## Description préliminaire
+En prenant pour seuil de réponse au traitement la chute d'au moins 50% du score de Hamilton par rapport à J0, j'ai 116 évènements au total (sur les 146 patients traités), 65 dans le groupe 0 et 51 dans le groupe 1. Au total, j'ai 2 évènements à J4, 22 à J7, 26 à J14, 21 à J21, 19 à J28, 19 à J42 et 7 à J56.  
+
+La médiane de survie globale est de 21 (temps auquel 50% des patients ont eu l'évènement)
+```{r, echo=FALSE, eval=FALSE}
+#suivi 
+suiv <- survfit(Surv(dws$time,1-dws$evt)~1)
+#plot(suiv,xscale=1, yscale= 100, xlab="Durée (jours)",xaxt = "n")
+#axis(1, at = levels(as.factor(dws$time)), cex.axis = 1) 
+med <- min(suiv$time[suiv$surv<=0.5])#mediane de suivi
+j <- paste0 (summary(suiv)$table['median']," [",summary(suiv)$table['0.95LCL'],"-",summary(suiv)$table['0.95UCL'],"]")
+
+#survie
+surv <- survfit(Surv(dws$time,dws$evt)~1, conf.int=.95)
+#plot(surv,xscale=1, yscale= 100, xlab="Durée (jours)",xaxt = "n")
+#axis(1, at = levels(as.factor(dws$time)), cex.axis = 1)
+med1 <- min(surv$time[surv$surv<=0.5])#mediane de survie
+j <- paste0 (summary(surv)$table['median']," [",summary(surv)$table['0.95LCL'],"-",summary(surv)$table['0.95UCL'],"]")
+
+```
+
+## Représentation graphique du délai de réponse au traitement en fonction du groupe
+
+### Méthode
+La méthode de Kaplan Meier permet de représenter graphiquement les courbes de survie (une courbe par groupe). 
+
+### Conditions de validité
+Kaplan Meier :  
+- censure indépendante de la probabilité de survenue de l'evenement  
+- probabilité de survie indépendante du moment de recrutement dans l'étude   
+- censure indépendante du groupe
+Je n'ai pas assez d'information sur le protocole de l'étude et les perdus de vu pour le vérifier.
+
+## Résultats
+
+```{r, echo=FALSE}
+
+g <- ggsurv(KMcurv, surv.col=c("skyblue", "royalblue"),size.est=1,cens.col="black") + 
+  scale_x_continuous(breaks=time) +
+  scale_y_continuous(labels=percent) +
+  labs(title =NULL, x = "Temps après premier questionnaire, jours", y = "Patients non répondeurs, %")  
+g
+```
+
+Fig.11 Courbes de survie par la méthode de Kaplan Meier du délai de réponse au traitement en fonction du groupe. 
+
+```{r, echo=FALSE}
+KMcurv <- survfit(Surv(time,evt)~GROUPE, data = dws)
+at_risk <- summary(KMcurv)
+dfrisk <- data.frame(at_risk[c(2:5,7)])
+dfrisk$surv <- paste(round(dfrisk$surv,2)*100,"%")
+
+dfrisk0 <- dfrisk[dfrisk$strata=="GROUPE=0",-5]
+dfrisk0tab <- data.frame(t(dfrisk0))[-1,]
+colnames(dfrisk0tab) <- paste0("J",dfrisk0$time)
+dfrisk0tab$J0 <- c(length(unique(dws$NUMERO[dws$GROUPE==0])), 0, "100%")
+dfrisk0tab <- dfrisk0tab[,c(8,1:7)]
+
+kable(dfrisk0tab)
+```
+
+Table 3 Table de survie du groupe 0
+
+```{r, echo=FALSE}
+dfrisk1 <- dfrisk[dfrisk$strata=="GROUPE=1",-5]
+dfrisk1tab <- data.frame(t(dfrisk1))[-1,]
+colnames(dfrisk1tab) <- paste0("J",dfrisk1$time)
+dfrisk1tab$J0 <- c(length(unique(dws$NUMERO[dws$GROUPE==1])), 0, "100%")
+dfrisk1tab$J4 <- c(length(unique(dws$NUMERO[dws$GROUPE==1])), 0, "100%")
+dfrisk1tab <- dfrisk1tab[c(7:8,1:6)]
+kable(dfrisk1tab)
+```
+
+Table 4 Table de survie du groupe 1
+
+On observe 2 courbes de survie, 1 pour le groupe 0  et 1 pour le groupe 1.
+A chaque temps, les "marches d'escalier" représentent les patients qui ont eu l'évènement, faisant diminuer le nombre de personnes à risque d'évènement(c'est à dire les non répondeurs). Les croix représentent à chaque temps la présence de censure (perdus de vue ou exclus vivant). Par exemple, je passe de 75% de répondeurs à J7 à un peu plus de 50% de répondeurs à J14 dans le groupe 0. Dans la table de survie (table 3) je vois que ça correspond à 16 patients ayant eu l'évènement à J14. Pour le groupe 1, je lis sur la courbe que je passe de 90% environ à 75% de répondeurs. Dans la table de survie (table 4) cela correspond à 10 patients ayant eu l'évènement. 
+
+
+## Comparaison du délai de réponse au traitement en fonction du groupe : estimation et test d'hypothèse
+
+### Méthode
+Pour comparer la survie dans les 2 groupes, j'utilise une régression de Cox me permettant de tester l'hypothèse nulle (la survie est la même dans les 2 groupes) grâce au test du score, et me donnant également le Hazard ratio (rapport des risques instantannés d'évènement) et son intervalle de confiance.  
+
+Voici mon modèle de Cox sous r:      
+
+modcox <- coxph(Surv(VISITE,evt)~GROUPE, data=dws)  
+
+J'aurai pu également utiliser une test du Log rank qui est un cas particulier de la régression de Cox.
+
+### Conditions de validité
+Régression de Cox:  
+- Hypothèse des risques proportionnels  
+- Hypothèse de loglinéarité
+
+```{r, echo=FALSE}
+modcox <- coxph(Surv(time,evt)~GROUPE, data=dws)
+a <- cox.zph(modcox) 
+#pvalue:
+a$table[3]
+#non significatif mais peut être manque de puissance => je trace une courbe
+plot(a,main="GROUPE")
+
+#ggcoxzph.1var(a,var="GROUPE")
+ 
+```
+
+Fig.10 Appréciation graphique de l’acceptabilité de l’hypothèse des risques proportionnels dans le modèle de Cox.
+
+La figure 10 nous montre que l'évolution temporelle des résidus de Shoenfeld est constante (aspect de droite horizontale), l'hypothèse des risques proportionnels est donc vérifiée.  Le test associé n'était pas non plus significatif (p>0.05) et donnait donc la même conclusion mais un schéma est plus informatif et lève le doute concernant un éventuel manque de puissance.
+
+Je ne suis pas sûre de bien comprendre comment interprêter l'hypothèse de Loglinéarité graphiquement quand la variable explicative est unique et binaire et je vais donc devoir supposer qu'elle est respectée.  
+
+
+Test du Log-rank:  
+- Nombreux temps de décès ou nombreux évènements à chaque temps. C'est vérifié ici.
+
+### Résultats
+
+```{r, eval=FALSE, echo=FALSE}
+a<-summary(modcox)
+res <- round(as.numeric(a$sctest[3]),5)
+
+HR <- round(exp(coef(modcox)),2)
+low95 <- round(exp(confint(modcox)),2)[1]
+up95 <-round(exp(confint(modcox)),2)[2]
+paste0(HR," [",low95,"-",up95,"]")
+```
+
+Le test du score, qui équivaut au test du Log rank, nous donne une p value <0.05. 
+
+Le Hazard ratio ou rapport des risques proportionnels de décès (ou d'évènements) permet de connaître l'intensité de cette différence. Le modèle de cox nous donne un hazard ratio avec son intervalle de confiance 0.50 CI95%[0.34-0.72].
+
+### Discussion
+Donc au risque 5%, la survie du groupe 0 est différente de celle du groupe 1 (la survie étant ici le pourcentage de non réponse). Avec la courbe de survie (figure 11), on peut dire que c'est dans le sens d'un nombre d'évènements plus important dans le groupe 0. Donc le groupe 0 répond significativement mieux au traitement.
+Les patients du groupe 1 ont deux fois moins de chance (ou risque) de répondre au traitement que les patients du groupe 0 ou encore les patients du groupe 0 ont deux fois plus de chance de répondre au traitement que les patients du groupe 1.
+
+Le test du log rank nous donne bien sûr le même résultat, et nous permet également, grâce à la table créée pour le test, de calculer le HR  et son intervalle de confiance à 95% qui est un peu plus large qu'avec un modèle de Cox.
+
+
+## Conclusion de la partie 3
+En réalisant une analyse de survie, l'évènement étant une diminution d'au moins 50% du score de Hamilton, on peut conclure à nouveau que le traitement est significativement plus efficace dans le groupe 0.
+
+
+
+# Conclusion
+
+Nous avons utilisé l'échelle de Hamilton pour comparer l'efficacité d'un traitement dans 2 groupes différents de patients déprimés. L'échelle a tout d'abord été revalidée dans notre échantillon à la première et dernière visite. Les résultats indiquait que la mesure était plus ou moins reproductible et que l'unidimensionnalité de l'échelle n'était pas troujours certaine, mais nous avons tout de même considéré que le score global reflétait l'intensité de la dépression. Quelque soit la méthode utilisée, LOCF avec comparaison des moyennes de différences de score entre J56 et J0, modèle mixte avec vitesse de décroissance du score, et analyse de survie avec pour évènement la diminution de 50% au moins du score de Hamilton, nous arrivons toujours à la même conclusion : au risque 5% le traitement est significativement plus efficace dans le groupe 0 que dans le groupe 1. Rappelons nous cependant que cette notion de risque de première espèce à 5% n'a pas grand sens ici en l'absence d'information sur la sélection de l'échantillon, et la formation des groupes.
+
+
+
+
+

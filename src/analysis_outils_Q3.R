@@ -14,8 +14,8 @@ dwh %>% filter(tot_4 < tot_0/2)
 date_evt <- lapply(1:nrow(dws), function(i){
   #browser()
   .l <- as.vector(dws[i, grep("tot_",colnames(dws))])
-  #.l <- .l <= (dws[i, "tot_0"]/2) #version 50% inclu
-  .l <- .l < (dws[i, "tot_0"]/2) #version 50% exclu
+  .l <- .l <= (dws[i, "tot_0"]/2) #version 50% inclu
+  #.l <- .l < (dws[i, "tot_0"]/2) #version 50% exclu
   prem_chute <- colnames(dws[,3:ncol(dws)])[head(which(.l==TRUE),1)]
   if (length(prem_chute)==0) res <- NA
   else {
@@ -55,6 +55,8 @@ dws$ddn <- ifelse (dws$evt==1, dws$date_evt, dws$ddn)
 #c'est deja des duree de suivie
 dws$time <- dws$ddn
 
+
+
 #Le patient ne peut pas avoir d'evenement entre J0 et J4 (est-ce qu'on appelle biais d'immortalité?),
 #je ne sais pas comment le prendre en compte dans mon analyse, et j'ai peur de faire des erreurs, je garde donc
 #mes durees de suivi telle quelle.
@@ -67,18 +69,18 @@ dws$time <- dws$ddn
 #et bien sûr de l'identifiant du patient et de son groupe
 dws <- dws[,c("NUMERO","GROUPE","evt","time")]
 
+saveRDS (dws, "data/dws.rds")
+
+#Nombre d'évènements par groupe
 table(dws$evt,dws$GROUPE,deparse.level = 2)
+#nombre d'évènements à chaque visite
 table(dws$time[dws$evt==1])
 
 #Analyses preliminaires : Description globale (sans differencier les courbes)
-#J'utilise la methode de Kaplan Meier pour tracer la courbe de survie
-#conditions : 
-#1-censure indépendante de la probabilité de survenue de l'evenement 
-#2-probabilité de sruvie est indépendante du moment de recrutement dans l'étude
-#3-censure doit être indépendante du groupe
 
 #suivi 
 suiv <- survfit(Surv(dws$time,1-dws$evt)~1)
+#plot du suivi global
 plot(suiv,xscale=1, yscale= 100, xlab="Durée (jours)",xaxt = "n")
 axis(1, at = levels(as.factor(dws$time)), cex.axis = 1) 
 med <- min(suiv$time[suiv$surv<=0.5])#mediane de suivi
@@ -87,6 +89,7 @@ dws %>% filter(time==56 & evt==1)#10 evenement à J56
 
 #survie
 surv <- survfit(Surv(dws$time,dws$evt)~1, conf.int=.95)
+#plot de la survie globale
 plot(surv,xscale=1, yscale= 100, xlab="Durée (jours)",xaxt = "n")
 axis(1, at = levels(as.factor(dws$time)), cex.axis = 1)
 med1 <- min(surv$time[surv$surv<=0.5])#mediane de survie
@@ -124,28 +127,20 @@ a$table[3]
 plot(a,main="GROUPE")
 #la courbe est à peu près horizontale, j'en conclue donc que la condition est vérifiée
 
-#2:Loglinéarité : ne s'applique pas ici
+#J'ai essayé de transformer en ggplot2 mais je n'y parviens pas.
+
+
+#2:Loglinéarité : ?
 
 #comparaison
 a <- coxph(Surv(dws$time,dws$evt)~dws$GROUPE)
+
+HR <- round(exp(coef(a)),2)
+up95 <- round(exp(confint(a)),2)[1]
+low95 <-round(exp(confint(a)),2)[2]
 a<-summary(a)
 res <- round(as.numeric(a$sctest[3]),3)
 
 
 
 
-#date_censor version apply
-# dw3 <- dwh
-# dw3[ ,3:ncol(dw3)] <- apply(dwh[,3:ncol(dwh)],2, function(x) x <= (dwh$tot_0/2))
-# 
-# dw3$date_censor <- apply(dw3[ ,3:ncol(dw3)],1,function(i){
-#   prem_chute <- colnames(dw3[,3:ncol(dw3)])[head(which(i==TRUE),1)]
-#   if (length(prem_chute)==0) res <- NA
-#   else {
-#     if (str_sub(prem_chute,-3,-3)=="_") res <- str_sub(prem_chute,-2,-1)
-#     else res <- str_sub(prem_chute, -1,-1)
-#   }
-#   return (res)
-# })
-# dw3$date_censor <- as.numeric(dw3$date_censor)
-# dw3$censor <- ifelse(!is.na(dw3$date_censor),1,0)

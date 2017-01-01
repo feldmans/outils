@@ -1,14 +1,25 @@
-library(psy)
-library(ggplot2)
-library(dplyr)
-library(gridExtra)
-library(knitr)
+################
+#  QUESION 1   #
+################
 
 source ("src/objects_outils.R") #Je charge les objets crées par le data management(évite de tout relancer)
 
 summary(d)
 head(dw)
 head(dl)
+
+#description de la basehdrs:
+
+#nb de visites
+a <- dwh
+b <- apply(dwh[,grep("tot",colnames(dwh))],2,function(x)!is.na(x))
+a$nvisites <- apply(b,1,sum)
+a %>% filter (nvisites!=8 & !is.na(tot_56))
+qplot(as.factor(a[,"nvisites"]),xlab="Nombre de visites effectuées", ylab="Nombre de patients", fill=I("navajowhite3"), col=I("pink4"))
+#nb de patients à J56
+dl %>% filter(time==56 & !is.na(HAMD1)) %>% count
+
+
 
 #1/valider hamilton au temps t=0
 
@@ -80,28 +91,27 @@ set.seed(123) #pour avoir un résultat reproductible
 BootCronCi(dl0,100)
 
 #D- validité concourrante et divergente
-dimensions <- c("somatisation","symptobs","sensitivite","depression","anxiete","hostilite","phobie","parano")
-somatisation <- paste0("Q",c(1,4,12,27,42,48,49,52,53,56,58,40))
-symptobs <- paste0("Q",c(9,10,28,38,3,4,46,51,55,65))
-sensitivite <- paste0("Q",c(6,21,34,36,37,41,61,69,73))
-depression <- paste0("Q",c(5,14,15,20,22,26,29,30,31,32,54,71,79))
-anxiete <- paste0("Q",c(2,17,23,33,39,57,72,78,80,86))
-hostilite <- paste0("Q",c(11,24,63,67,74,81))
-phobie <- paste0("Q",c(13,25,47,70,75,82,50))
-parano <- paste0("Q",c(8,18,43,68,76,83))
 
 #Description des données manquantes pour sc0
+
+sclbis <- read.csv2("data/SCL90.csv")
+for (i in colnames(sclbis)[grep("Q",colnames(sclbis))]){
+  sclbis[,i] <- as.numeric(as.character(sclbis[ ,i])) #"NAs introduce by coercion" car il ya des ND et des ""
+  #Je change les valeurs aberrantes (superieures à 4) en NA
+  sclbis[,i] <- ifelse (sclbis[,i] > 4, NA, sclbis[,i])
+}
+sclbis <- sclbis %>% filter (VISIT=="J0")
+table(apply(sclbis[ ,grep("Q",colnames(sclbis))],1,sum),useNA = "a") #112 questionnaires complets
+table(apply(apply(sclbis[ ,grep("Q",colnames(sclbis))],2,is.na),1,sum),useNA = "a") #moins de 12 items manquants par patient
+
+
 table(apply(apply(sc0[,grep("Q",colnames(sc0))],2,is.na),1,sum))
 #   0  90 
 # 143   3 
 #143 ont des données complètes, 3 ont une échelle non remplie (NA pour les 90 items)
 
-#calcul du score de hamilton et des sous scores de scl90
+#calcul du score global de Hamilton
 dl0$global <- apply(dl0[,-1],1,sum) #de 0 à 52
-sc0[,dimensions] <- sapply(dimensions,function(x){
-  data <- sc0[,get(x)]
-  res <- apply(data,1,function(i)sum(i,na.rm=F))#faire une moyenne ou une somme ne change rien
-}) #Rappel: Na imputés en médiane lorsque au moins un item est renseigné (c'est à dire lorsque la ligne était presente dans SCL90)
 
 #corrélation:
 cor(dl0$global,sc0[ ,dimensions],use="complete.obs") #j'ai bien fait attention à ce que les numero de dl0 et sc0 soit dans le meme ordre
@@ -114,8 +124,7 @@ fpca(y="global",x=dimensions,data=dlsc0)
 
 
 #valider hamilton au temps t=56
-dl56 <- dl %>% filter(time==56) %>% select(NUMERO, grep("HAM",colnames(dl)))
-sc56 <- dl %>% filter (time==56) %>% select(NUMERO, grep("Q", colnames(dl)))
+
 
 summary(dl56)
 summary(sc56)
@@ -132,7 +141,7 @@ table(apply(apply(dl56[,grep("HAM",colnames(dl56))],2,is.na),1,sum))
 #120 patients ont une échelle complète, 26 patients ont une échelle non remplie (NA aux 17 items)
 
 #A3- corrélation entre items
-mat <- cor(dl56[,-1])
+mat <- cor(dl56[,-1],use="complete.obs") #attention il y a des NA! la matrice est NA si on ne les supprime pas 
 
 couples<-lapply(c(0.2,0.4),function(w){
   #pour supprimer les doublons
@@ -169,7 +178,7 @@ print(fit.3, digits=2, cutoff=.1,sort=F)
 fit.2 <- factanal(dl56[!is.na(dl56$HAMD1), -1], factors = 2, rotation = "varimax")
 print(fit.2,digits=2, cutoff=.1,sort=F) 
 fit.1 <-factanal(dl56[!is.na(dl56$HAMD1), -1], factors = 1, rotation = "varimax")
-print(fit.1,digits=2, cutoff=.1,sort=F) #fait une rotation varimax automatiquement
+print(fit.1,digits=2, cutoff=.1,sort=F) 
 
 #A faire si temps ACP pour variables et sujets (et se demander si normaliser ou non)
 
@@ -179,18 +188,20 @@ set.seed(1234) #pour avoir un résultat reproductible
 BootCronCi(dl56,100)
 
 #D- validité concourrante et divergente
-#Description des données manquantes pour sc56
-table(apply(apply(sc56[,grep("Q",colnames(sc56))],2,is.na),1,sum))
-# 0  1   2  4  7 90 
-# 94 18  3  1  1 29  
-#94 ont des données complètes, 3 ont une échelle non remplie (NA pour les 90 items)
 
-#calcul du score de hamilton et des sous scores de scl90
+#calcul du score global de Hamilton
 dl56$global <- apply(dl56[,-1],1,sum) #de 0 à 52
-sc56[,dimensions] <- sapply(dimensions,function(x){
-  data <- sc56[,get(x)]
-  res <- apply(data,1,function(i)sum(i,na.rm=F))
-}) #Rappel: Na imputés en médiane lorsque au moins un item est renseigné (c'est à dire lorsque la ligne était presente dans SCL90)
+
+#Description des données manquantes pour sc56
+sclbis <- read.csv2("data/SCL90.csv")
+for (i in colnames(sclbis)[grep("Q",colnames(sclbis))]){
+  sclbis[,i] <- as.numeric(as.character(sclbis[ ,i])) #"NAs introduce by coercion" car il ya des ND et des ""
+  #Je change les valeurs aberrantes (superieures à 4) en NA
+  sclbis[,i] <- ifelse (sclbis[,i] > 4, NA, sclbis[,i])
+}
+sclbis <- sclbis %>% filter (VISIT=="J56")
+table(apply(sclbis[ ,grep("Q",colnames(sclbis))],1,sum),useNA = "a") #112 questionnaires complets
+table(apply(apply(sclbis[ ,grep("Q",colnames(sclbis))],2,is.na),1,sum),useNA = "a") #moins de 12 items manquants par patient
 
 #corrélation:
 cor(dl56$global,sc56[ ,dimensions],use="complete.obs") #j'ai bien fait attention à ce que les numero de dl56 et sc56 soit dans le meme ordre

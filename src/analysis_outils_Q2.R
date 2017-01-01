@@ -14,16 +14,23 @@ getLOCF <- function(line){
 }
 dwh$last <- apply(dwh[,grep("tot_",colnames(dwh))],1,getLOCF)
 
-for (i in paste0("tot_",time)){
+for (i in paste0("tot_",vartime)){
   dwh[ ,i] <- ifelse (is.na(dwh[ ,i]), dwh$last,dwh[ ,i])
 }
 
 dwh$diff_56_0 <- dwh$last - dwh$tot_0 
 
+#Test de student
 t.test (dwh[dwh$GROUPE=="0","diff_56_0"],dwh[dwh$GROUPE=="1","diff_56_0"])
+#normalité de la différence de score
+hist(dwh$diff_56_0)
+#égalité des variances
+by(dwh$diff_56_0,dwh$GROUPE,sd,na.rm=T)
 
-
-
+#Régression linéaire
+summary(moddiff <- lm(diff_56_0~GROUPE, dwh))
+#normalité des résidus
+hist(residuals(moddiff))
 
 #modele mixte :
 
@@ -54,6 +61,8 @@ summary(mod2 <- lmer(tot~time*GROUPE+(1|NUMERO),dlh))
 
 
 mod2 <- lmer(tot~time*GROUPE+(1|NUMERO),dlh)
+qplot(resid(mod2))
+
 #pour interpreter la t value, je cherche le nombre de degrés de libertés
 require(pbkrtest)
 # get the KR-approximated degrees of freedom

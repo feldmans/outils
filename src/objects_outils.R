@@ -6,19 +6,58 @@ library(knitr)
 library(stringr)
 library(survival)
 library(boot)
-library(ReporteRs)
+library(lme4)
+library(GGally) #pour faire de beaux plot de survie
+library(survminer) #autre package pour faire de belles courbes de survie
 
 #gpe <- read.csv2("data/groupe.csv") #utilisé dans calcul des scores globaux façon 2
 dw <- readRDS("data/dw.rds")
 dl <- readRDS("data/dl.rds")
 dwh <- readRDS("data/dwh.rds") #ne contient que les scores globaux de hamilton aux différents temps (utile pour Q2 LOCF et Q3)
 dlh <- readRDS("data/dlh.rds") #contient les scores globaux, les temps NUMERO et groupe en format long
-h0 <- dl %>% filter(time==0) %>% select(NUMERO, grep("HAM",colnames(dl)))
+dws <- readRDS("data/dws.rds")
+
+vartime <-   c(0, 4, 7, 14, 21, 28, 42, 56)
+
+#Dimensions de scl90
+dimensions <- c("somatisation","symptobs","sensitivite","depression","anxiete","hostilite","phobie","parano","psychotique")
+somatisation <- paste0("Q", c(1,4,12,27,42,48,49,52,53,56,58,40))
+symptobs <- paste0("Q", c(9,10,28,38,3,4,46,51,55,65))
+sensitivite <- paste0("Q", c(6,21,34,36,37,41,61,69,73))
+depression <- paste0("Q", c(5,14,15,20,22,26,29,30,31,32,54,71,79))
+anxiete <- paste0("Q", c(2,17,23,33,39,57,72,78,80,86))
+hostilite <- paste0("Q", c(11,24,63,67,74,81))
+phobie <- paste0("Q", c(13,25,47,70,75,82,50))
+parano <- paste0("Q", c(8,18,43,68,76,83))
+psychotique <- paste0("Q",c(7,16,35,62,77,84,85,87,90,88))
+#divers <- paste0("Q",c(19,44,59,60,64,66,89))
+
+
+#Dataset hamilton et scl90 aux temps 0 et 56:
+dl0 <- dl %>% filter(time==0) %>% select(NUMERO, grep("HAM",colnames(dl)))
+#h0 <- dl %>% filter(time==0) %>% select(NUMERO, grep("HAM",colnames(dl)))
 sc0 <- dl %>% filter (time==0) %>% select(NUMERO, grep("Q", colnames(dl)))
-h56 <- dl %>% filter(time==56) %>% select(NUMERO, grep("HAM",colnames(dl)))
+
+dl56 <- dl %>% filter(time==56) %>% select(NUMERO, grep("HAM",colnames(dl)))
+#h56 <- dl %>% filter(time==56) %>% select(NUMERO, grep("HAM",colnames(dl)))
 sc56 <- dl %>% filter (time==56) %>% select(NUMERO, grep("Q", colnames(dl)))
-h0$global <- apply(h0[,-1],1,sum) 
-h56$global <- apply(h56[,-1],1,sum) 
+
+# h0$global <- apply(h0[,-1],1,sum) 
+# h56$global <- apply(h56[,-1],1,sum) 
+
+#calcul des sous scores de scl90
+sc0[,dimensions] <- sapply(dimensions,function(x){
+  data <- sc0[,get(x)]
+  res <- apply(data,1,function(i)sum(i,na.rm=F))#faire une moyenne ou une somme ne change rien
+}) 
+
+sc56[,dimensions] <- sapply(dimensions,function(x){
+  data <- sc56[,get(x)]
+  res <- apply(data,1,function(i)sum(i,na.rm=F))
+}) 
+#Rappel: pour scl90, Na imputés en médiane dans data_management.R lorsque au moins un item est renseigné 
+#(c'est à dire lorsque la ligne était presente dans SCL90)
+
 
 
 
