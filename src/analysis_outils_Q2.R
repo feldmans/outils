@@ -14,7 +14,7 @@ getLOCF <- function(line){
 }
 dwh$last <- apply(dwh[,grep("tot_",colnames(dwh))],1,getLOCF)
 
-for (i in paste0("tot_",vartime)){
+for (i in paste0("tot_", c(0, 4, 7, 14, 21, 28, 42, 56))){
   dwh[ ,i] <- ifelse (is.na(dwh[ ,i]), dwh$last,dwh[ ,i])
 }
 
@@ -34,39 +34,18 @@ hist(residuals(moddiff))
 
 #modele mixte :
 
-#exemple de la vidéo :
-library(lme4)
-set.seed(5)
-x <- floor (20*rnorm(15))+60
-y <- floor (20*rnorm(15))
-x1 <- x
-x2 <- x+y+7
-dt <- data.frame(1:15,x1,x2)
-names(dt)[1]<- "sujet"
-dtl <- reshape(dt, idvar="sujet", varying=2:3,v.names="score",timevar = "temps", direction="long")
-
-#dt <- data.frame(1:15,x1,x1,x2,x2)
-#dtl <- reshape(dt, idvar="sujet", varying=list(c(2,4),c(3,5)), v.names=c("score1","score2"),timevar = "temps", direction="long")
-#varying = pour chaque variable c(tps1,tps2)
-#v.names = nom de chaque variable qui sera répétée à plsieurs temps
-
-dtl$sujet <- as.factor(dtl$sujet)
-summary(lm(score~temps+sujet,dtl))
-summary(lmer(score~temps+(1|sujet),dtl))#voir comment on trouve la pvalue pour t test avec N-1 ddl
-
 #pour les données
 head(dlh)
 summary(mod1 <- lm(tot~time*GROUPE+NUMERO,dlh)) #interaction significative
 summary(mod2 <- lmer(tot~time*GROUPE+(1|NUMERO),dlh))
 
-
-mod2 <- lmer(tot~time*GROUPE+(1|NUMERO),dlh)
+#normalité des résidus
 qplot(resid(mod2))
 
 #pour interpreter la t value, je cherche le nombre de degrés de libertés
-require(pbkrtest)
+
 # get the KR-approximated degrees of freedom
-df.KR <- get_ddf_Lb(mod2, fixef(mod2))
+df.KR <- get_ddf_Lb(mod2, fixef(mod2)) #require(pbkrtest)
 coefs <- data.frame(coef(summary(mod2)))
 # get p-values from the t-distribution using the t-values and approximated degrees of freedom
 coefs$p.KR <- 2 * (1 - pt(abs(coefs$t.value), df.KR))

@@ -1,16 +1,18 @@
 ---
 title: "R Notebook"
 output:
-  html_document: default
+  word_document: default
   html_notebook: default
   pdf_document: default
-  word_document: default
+  html_document: default
 ---
 
 ```{r allsource, echo=FALSE, message=FALSE}
 setwd("F:/to push/outils_git")
 source ("src/objects_outils.r")
 source("src/functions_outils.R")
+
+# cbp <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ```
 
 #Introduction  
@@ -32,7 +34,7 @@ a <- dwh
 b <- apply(dwh[,grep("tot",colnames(dwh))],2,function(x)!is.na(x))
 a$nvisites <- apply(b,1,sum)
 #a %>% filter (nvisites!=8 & !is.na(tot_56))
-qplot(as.factor(a[,"nvisites"]),xlab="Nombre de visites effectuées", ylab="Nombre de patients", fill=I("navajowhite3"), col=I("pink4"))
+qplot(as.factor(a[,"nvisites"]),xlab="Nombre de visites effectuées", ylab="Nombre de patients", fill=I("slategray2"), col=I("lavenderblush4"))
 
 #dl %>% filter(time==56 & !is.na(HAMD1)) %>% count
 ```
@@ -368,12 +370,12 @@ Pour un test de student, on vérifié l'égalité des variances de l'a différen
 ```{r, echo=FALSE}
 dwh$last <- apply(dwh[,grep("tot_",colnames(dwh))],1,getLOCF)
 
-for (i in paste0("tot_",vartime)){
+for (i in paste0("tot_",c(0, 4, 7, 14, 21, 28, 42, 56))){
   dwh[ ,i] <- ifelse (is.na(dwh[ ,i]), dwh$last,dwh[ ,i])
 }
 dwh$diff_56_0 <- dwh$last - dwh$tot_0 
 #hist(dwh$diff_56_0)
-qplot(dwh$diff_56_0, xlab="Différence de score entre J56 et J0", fill=I("grey80"), col=I("darkblue"),bins=10)
+qplot(dwh$diff_56_0, xlab="Différence de score entre J56 et J0", fill=I("seashell3"), col=I("pink4"),bins=10)
       
 ```
 
@@ -389,7 +391,8 @@ Toutes les conditions de validité sont donc remplies.
 ```{r, echo=FALSE, width=5}
 ggplot(dwh, aes(y = diff_56_0, x=GROUPE)) +
 stat_boxplot(geom = "errorbar", width = 0.3, color = "lightsteelblue4") +
-geom_boxplot(width = 0.5, fill = "lightsteelblue2", color = "lightsteelblue4") +
+#geom_boxplot(width = 0.5, fill = c("lightsteelblue2", color = "lightsteelblue4") +
+geom_boxplot(width = 0.5, fill = c("#E69F00","#009E73"), color = c("lightsteelblue4","grey")) +
 scale_x_discrete() + xlab("Groupe") + ylab("Différence de score entre J56 et J0") +ggtitle ("Diiférence de score entre J56 et J0 selon les groupes")
 
 ```
@@ -433,7 +436,7 @@ mod2 <- lmer(score ~ temps + groupe + temps*groupe +(1|patient),dlh)
 
 ```{r, echo= FALSE}
 mod2 <- lmer(tot ~ time*GROUPE +(1|NUMERO),dlh)
-qplot(resid(mod2), xlab="résidus du modèle mixte mod2", binwidth=2)
+qplot(resid(mod2), xlab="résidus du modèle mixte mod2", fill=I("seashell3"), col=I("pink4"), binwidth=2)
 ```
 
 Fig.10 Distribution des résidus du modèle mixte mod2
@@ -503,18 +506,19 @@ Je n'ai pas assez d'information sur le protocole de l'étude et les perdus de vu
 ## Résultats
 
 ```{r, echo=FALSE}
-
-g <- ggsurv(KMcurv, surv.col=c("skyblue", "royalblue"),size.est=1,cens.col="black") + 
+KMcurv <- survfit(Surv(time,evt)~GROUPE, data = dws)
+g <- ggsurv(KMcurv, surv.col=c("#E69F00", "#009E73"),size.est=1,cens.col="black") + 
   scale_x_continuous(breaks=time) +
   scale_y_continuous(labels=percent) +
-  labs(title =NULL, x = "Temps après premier questionnaire, jours", y = "Patients non répondeurs, %")  
+  labs(title =NULL, x = "Temps après premier questionnaire, jours", y = "Patients non répondeurs, %")  +
+  theme(axis.text=element_text(size=10),
+        axis.title=element_text(size=12))
 g
 ```
 
 Fig.11 Courbes de survie par la méthode de Kaplan Meier du délai de réponse au traitement en fonction du groupe. 
 
 ```{r, echo=FALSE}
-KMcurv <- survfit(Surv(time,evt)~GROUPE, data = dws)
 at_risk <- summary(KMcurv)
 dfrisk <- data.frame(at_risk[c(2:5,7)])
 dfrisk$surv <- paste(round(dfrisk$surv,2)*100,"%")

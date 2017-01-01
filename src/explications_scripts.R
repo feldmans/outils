@@ -17,8 +17,9 @@
 #les tableaux normalisés et dénormalisés, le calcul des scores, les données à J0 et J56 pour hamilton et scl90, mais aussi le tableau utilisé
 #pour l'analyse de survie. Tous les tableaux obtenus sont enregistrés au format rds.
 
-#2. Un script nommé "objects_outils.R" qui execute le chargement des objets crées dans le script "data_management.r"
-#   et qui charge toutes les librairies utilisées lors de l'analyse
+#2. Un script nommé "objects_outils.R" qui execute le chargement des objets crées dans le script "data_management.r",
+#   qui charge toutes les librairies utilisées lors de l'analyse,
+#   qui créer les vecteurs utilisés à plusieurs reprises
 
 #3. Un script nommé "functions_outils.R" qui contient les fonctions crées pour le devoir
 
